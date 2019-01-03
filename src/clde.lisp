@@ -1,6 +1,7 @@
 (defpackage clde
-  (:use :cl)
+  (:use :cl :sb-thread)
   (:export :de
+	   :mtde
 	   :de/rand/1/bin
 	   :de/rand/2/bin
 	   :de/best/2/bin
@@ -139,6 +140,43 @@
 	      (if (< this-score best-score)
 		  (progn (setf best-score this-score)
 			 (setf best selected)))))))
+
+    best))
+
+(defun mtde (pop-size max-generations cost-function dimensions cr f
+	     &key (strat 'rand) (diffs 1))
+
+  (let* ((population (random-population pop-size dimensions))
+	 (best (aref population 0))
+	 (best-score (funcall cost-function best)))
+
+    (loop
+       :for g :from 0 :below max-generations
+       :until (eql best-score 0.0d0)
+       :do
+       (let ((individuals (loop
+			     :for i :from 0 :below pop-size
+			     :collect
+			     (let ((pop population)
+				   (safe-i i))
+			       (make-thread (lambda ()
+					      (let* ((target (aref pop safe-i))
+						     (donor (if (equalp 'rand strat)
+								(gen-donor (remove target pop :count 1) f :diffs diffs)
+								(gen-donor-best best (remove target pop :count 1) f :diffs diffs)))
+						     (trial (crossover target donor cr))
+						     (selected (select target trial cost-function)))
+
+						selected)))))))
+	 (loop
+	    :for i :from 0 :below (length individuals)
+	    :do
+	    (let ((survivor (join-thread (elt individuals i))))
+	      (setf (aref population i) survivor)
+	      (let ((this-score (funcall cost-function survivor)))
+		(if (< this-score best-score)
+		    (progn (setf best-score this-score)
+			   (setf best survivor))))))))
 
     best))
 
