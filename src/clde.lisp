@@ -125,6 +125,8 @@
        :for g :from 0 :below max-generations
        :until (eql best-score 0.0d0)
        :do
+       (if (eq (mod g 100) 0)
+	   (format t "Gen: ~a~%Best: ~a~%Score: ~a~%~%" g best best-score))
        (loop
 	  :for i :from 0 :below pop-size
 	  :do
