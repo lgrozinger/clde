@@ -6,18 +6,6 @@
 	   :de/rand/2/bin
 	   :de/best/2/bin
 	   :de/best/1/bin
-	   :pick-random
-	   :choose-n
-	   :choose-n-not
-	   :v-add
-	   :v-sub
-	   :v-scale
-	   :f-diff
-	   :gen-donor
-	   :crossover
-	   :select
-	   :random-individual
-	   :random-population
 	   :rosenbrock))
 (in-package :clde)
 
@@ -109,15 +97,15 @@
 					      :for i :from 0 :below dimensions
 					      :collect (+ lower (random (- upper lower))))))
 
-(defun random-population (pop-size dimensions &key (lower 0.0d0) (upper 1.0d2))
+(defun random-population (pop-size dimensions &key (lower 0.0d0) (upper 1.0d1))
   (make-array pop-size :initial-contents (loop
 					    :for i :from 0 :below pop-size
 					    :collect (random-individual dimensions upper lower))))
 
 (defun de (pop-size max-generations cost-function dimensions cr f
-	   &key (strat 'rand) (diffs 1))
+	   &key (strat 'rand) (diffs 1) (rand-lb 0.0d0) (rand-ub 1.0d1))
 
-  (let* ((population (random-population pop-size dimensions))
+  (let* ((population (random-population pop-size dimensions :lower rand-lb :upper rand-ub))
 	 (best (aref population 0))
 	 (best-score (funcall cost-function best)))
 
@@ -125,7 +113,7 @@
        :for g :from 0 :below max-generations
        :until (eql best-score 0.0d0)
        :do
-       (if (eq (mod g 100) 0)
+       (if (eq 0 (mod g 1000))
 	   (format t "Gen: ~a~%Best: ~a~%Score: ~a~%~%" g best best-score))
        (loop
 	  :for i :from 0 :below pop-size
@@ -142,13 +130,12 @@
 	      (if (< this-score best-score)
 		  (progn (setf best-score this-score)
 			 (setf best selected)))))))
-
     best))
 
 (defun mtde (pop-size max-generations cost-function dimensions cr f
-	     &key (strat 'rand) (diffs 1))
+	     &key (strat 'rand) (diffs 1) (rand-lb 0.0d0) (rand-ub 1.0d1))
 
-  (let* ((population (random-population pop-size dimensions))
+  (let* ((population (random-population pop-size dimensions :lower rand-lb :upper rand-ub))
 	 (best (aref population 0))
 	 (best-score (funcall cost-function best)))
 
