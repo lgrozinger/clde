@@ -1,7 +1,8 @@
 (defpackage clde
-  (:use :cl :sb-thread)
+  (:use :cl :sb-thread :cl-randist)
   (:export :de
-	   :mtde
+           :mtde
+	   :jade-de
 	   :de/rand/1/bin
 	   :de/rand/2/bin
 	   :de/best/2/bin
@@ -9,7 +10,8 @@
 	   :rosenbrock))
 (in-package :clde)
 
-;; blah blah blah.
+(defun lehmer-mean (list)
+  (/ (reduce #'+ (map 'list #'* list list)) (reduce #'+ list)))
 
 (defun pick-random (vector)
   (let ((rand-index (random (length vector))))
@@ -62,6 +64,33 @@
 
     donor))
 
+(defun gaussian-f (mean sigma)
+  (let ((f (random-normal mean sigma)))
+    (if (< f 0.0d0)
+	(gaussian-f mean sigma)
+	(if (> f 2.0d0)
+	    2.0d0
+	    f))))
+  
+(defun gaussian-cr (mean sigma)
+  (let ((cr (random-normal mean sigma)))
+    (if (< cr 0.0d0)
+	0.0d0
+	(if (> cr 1.0d0)
+	    1.0d0
+	    cr))))
+
+(defun evolve-f (current-mean successful-list c)
+  (if successful-list
+      (let ((success-mean (lehmer-mean successful-list)))
+	(+ (* (- 1 c) current-mean) (* c success-mean)))
+      current-mean))
+    
+(defun evolve-cr (current-mean successful-list c)
+  (if successful-list
+      (let ((success-mean (/ (reduce #'+ successful-list) (length successful-list))))
+	(+ (* (- 1 c) current-mean) (* c success-mean)))
+      current-mean))
 
 (defun crossover (target-vector donor-vector crossover-rate)
   (let* ((d (length target-vector))
@@ -101,6 +130,45 @@
   (make-array pop-size :initial-contents (loop
 					    :for i :from 0 :below pop-size
 					    :collect (random-individual dimensions upper lower))))
+
+(defun jade-de (pop-size max-generations cost-function dimensions init-cr init-f
+		&key (strat 'rand) (diffs 1) (rand-lb 0.0d0) (rand-ub 1.0d1))
+  (let* ((population (random-population pop-size dimensions :lower rand-lb :upper rand-ub))
+	 (best (aref population 0))
+	 (best-score (funcall cost-function best))
+	 (mean-cr init-cr)
+	 (mean-f init-f))
+    (loop
+      :for g :from 0 :below max-generations
+      :until (eql best-score 0.0d0)
+      :do
+	 (if (eq 0 (mod g 1000))
+	     (format t "Gen: ~a~%Best: ~a~%Score: ~a~%~%" g best best-score))
+	 (let* ((successful-cr ())
+		(successful-f ()))
+	   (loop
+	     :for i :from 0 :below pop-size
+	     :do
+		(let* ((target (aref population i))
+		       (f (gaussian-f mean-f 1.0d-1))
+		       (donor (if (equalp 'rand strat)
+				  (gen-donor (remove target population :count 1) f :diffs diffs)
+				  (gen-donor-best best (remove target population :count 1) f :diffs diffs)))
+		       (cr (gaussian-cr mean-cr 1.0d-1))
+		       (trial (crossover target donor cr))
+		       (selected (select target trial cost-function))
+		       (success (equal selected trial)))
+
+		  (if success (setf successful-cr (append successful-cr (list cr))))
+		  (setf (aref population i) selected)
+		  (let ((this-score (funcall cost-function selected)))
+		    (if (< this-score best-score)
+			(progn (setf best-score this-score)
+			       (setf best selected))))))
+	   (setf mean-cr (evolve-cr mean-cr successful-cr 2.0d-1))
+	   (setf mean-f (evolve-f mean-f successful-f 2.0d-1))))
+      best))
+
 
 (defun de (pop-size max-generations cost-function dimensions cr f
 	   &key (strat 'rand) (diffs 1) (rand-lb 0.0d0) (rand-ub 1.0d1))
