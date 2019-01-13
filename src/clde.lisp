@@ -76,7 +76,7 @@
 		    (setf good-Fs (cons this-F good-Fs)))))
 
 	   (setf CR (evolve-cr CR good-CRs 1.0d-1))
-	   (setf F (evolve-f F good-Fs 1.0d-1))
+	   (setf F (evolve-f F good-Fs 1.0d-1))))
 
     (report G P costs)
     (elt P (position (reduce #'min costs) costs))))
