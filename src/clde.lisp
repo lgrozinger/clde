@@ -14,8 +14,6 @@
 (in-package :clde)
 
 (defparameter *FE* 0)
-(defvar *Fs* ())
-(defvar *CRs* ())
 
 (defun de (NP G D CR F objective population combination mutation
 	   &key (target-cost 0.0d0) (report-every 1000))
@@ -79,8 +77,6 @@
 
 	   (setf CR (evolve-cr CR good-CRs 1.0d-1))
 	   (setf F (evolve-f F good-Fs 1.0d-1))
-	   (setf *Fs* (nconc *Fs* (list F)))
-	   (setf *CRs* (nconc *CRs* (list CR)))))
 
     (report G P costs)
     (elt P (position (reduce #'min costs) costs))))
