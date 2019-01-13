@@ -6,7 +6,7 @@
   :version "0.1.0"
   :author ""
   :license ""
-  :depends-on ()
+  :depends-on (#:cl-randist)
   :components ((:module "src"
                 :components
                 ((:file "clde"))))
