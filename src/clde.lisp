@@ -2,6 +2,7 @@
   (:use :cl :sb-thread :cl-randist)
   (:export :de
 	   :jade
+	   :jade-refresh
 	   :de/rand/1/bin
 	   :de/rand/2/bin
 	   :de/best/2/bin
@@ -14,6 +15,7 @@
 (in-package :clde)
 
 (defparameter *FE* 0)
+(defparameter *C* ())
 
 (defun de (NP G D CR F objective population combination mutation
 	   &key (target-cost 0.0d0) (report-every 1000))
@@ -79,8 +81,65 @@
 	   (setf F (evolve-f F good-Fs 1.0d-1))))
 
     (report G P costs)
-    (elt P (position (reduce #'min costs) costs))))
+    (values (elt P (position (reduce #'min costs) costs))
+	    P)))
 
+(defun jade-refresh (NP G D CR F objective population combination mutation
+		     &key (target-cost 0.0d0) (report-every 1000) (stagnation-limit 1000))
+
+  (let* ((P (funcall population NP D))
+	 (costs (make-array (length P) :initial-contents (map 'list objective P)))
+	 (stagnation-counter 0))
+
+    ;; EVERY GENERATION
+    (loop
+       :for i :from 1 :to G
+       :until (<= (reduce #'min costs) target-cost)
+       :do
+	 (if (eq 0 (mod i report-every)) (report i P costs))
+	 (let ((good-CRs ())
+	       (good-Fs ()))
+	   ;; EVERY INDIVIDUAL
+	   (loop
+	      :for j :from 0 :below (length P)
+	      :do
+		(let* ((target (aref P j))
+		       (this-CR (gaussian-cr CR 1.0d-1))
+		       (this-F (gaussian-f F 1.0d-1))
+		       (donor (funcall combination target P costs this-F))
+		       (trial (funcall mutation target donor this-CR))
+		       (score (funcall objective trial)))
+
+		  (when (< score (elt costs j))
+		    (setf (aref P j) trial)
+		    (setf (aref costs j) score)
+		    (setf good-CRs (cons this-CR good-CRs))
+		    (setf good-Fs (cons this-F good-Fs)))))
+
+	   (when (not good-Fs)
+	     (setf stagnation-counter (+ 1 stagnation-counter)))
+
+	   ;; the refresh part
+	   (when (or (inbred-p P) (> stagnation-counter stagnation-limit))
+	     (setf P (refresh P NP population))
+	     (setf costs (make-array (length P) :initial-contents (map 'list objective P)))
+	     (setf stagnation-counter 0)
+	     (format t "REFRESH POPULATION...~%"))
+
+	   (setf CR (evolve-cr CR good-CRs 1.0d-1))
+	   (setf F (evolve-f F good-Fs 1.0d-1))))
+
+    (report G P costs)
+    (values (elt P (position (reduce #'min costs) costs)) P)))
+
+(defun inbred-p (P)
+  (every (lambda (x) (equalp (elt P 0) x)) P))
+
+(defun refresh (P NP gen-fun)
+  (let* ((D (length (elt P 0)))
+	 (survivors (subseq P 0 1))
+	 (refreshers (funcall gen-fun (- NP 1) D)))
+    (make-array NP :initial-contents (concatenate (type-of P) survivors refreshers))))
 
 (defun combine-rand (target P costs F &key (diffs 1))
   (declare (ignorable costs))
@@ -211,6 +270,7 @@
 (defun report (G P costs)
   (let* ((cost (reduce #'min costs))
 	 (top-P (elt P (position cost costs))))
+    (setf *C* (nconc *C* (list cost)))
     (format t "Gen: ~a~%Best: ~a~%Score: ~a~%~%" G cost top-P)))
 
 ;; (defun mtde (pop-size max-generations cost-function dimensions cr f
