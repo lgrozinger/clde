@@ -121,10 +121,11 @@
 
 	   ;; the refresh part
 	   (when (or (inbred-p P) (> stagnation-counter stagnation-limit))
-	     (setf P (refresh P NP population))
+	     (setf NP (floor (* NP 1.1)))
+	     (setf P (refresh P NP population costs))
 	     (setf costs (make-array (length P) :initial-contents (map 'list objective P)))
 	     (setf stagnation-counter 0)
-	     (format t "REFRESH POPULATION...~%"))
+	     (format t "REFRESH POPULATION... NP = ~a~%" NP))
 
 	   (setf CR (evolve-cr CR good-CRs 1.0d-1))
 	   (setf F (evolve-f F good-Fs 1.0d-1))))
@@ -135,11 +136,12 @@
 (defun inbred-p (P)
   (every (lambda (x) (equalp (elt P 0) x)) P))
 
-(defun refresh (P NP gen-fun)
+(defun refresh (P NP gen-fun costs)
   (let* ((D (length (elt P 0)))
-	 (survivors (subseq P 0 1))
+	 (best (position (reduce #'min costs) costs))
+	 (survivors (list (elt P best)))
 	 (refreshers (funcall gen-fun (- NP 1) D)))
-    (make-array NP :initial-contents (concatenate (type-of P) survivors refreshers))))
+    (make-array NP :initial-contents (concatenate (list 'simple-vector NP) survivors refreshers))))
 
 (defun combine-rand (target P costs F &key (diffs 1))
   (declare (ignorable costs))
