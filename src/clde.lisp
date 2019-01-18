@@ -1,6 +1,7 @@
 (defpackage clde
   (:use :cl :sb-thread :cl-randist)
   (:export :de
+	   :mtde
 	   :jade
 	   :jade-refresh
 	   :de/rand/1/bin
@@ -42,6 +43,49 @@
 		(when (< score (elt costs j))
 		  (setf (aref P j) trial)
 		  (setf (aref costs j) score)))))
+
+    (report G P costs)
+    (elt P (position (reduce #'min costs) costs))))
+
+(defun mtde (NP G D CR F objective population combination mutation
+	   &key (target-cost 0.0d0) (report-every 1000))
+
+  (let* ((P (funcall population NP D))
+	 (costs (make-array (length P) :initial-contents (map 'list objective P))))
+
+    ;; EVERY GENERATION
+    (loop
+       :for i :from 1 :to G
+       :until (<= (reduce #'min costs) target-cost)
+       :do
+       (if (eq 0 (mod i report-every)) (report i P costs))
+
+       ;; EVERY INDIVIDUAL
+       (let ((individuals (make-array NP)))
+	 (loop
+	    :for j :from 0 :below NP
+	    :do
+	    (let ((thread-P P)
+		  (thread-costs costs)
+		  (thread-j j))
+	      (setf (aref individuals j)
+		    (make-thread (lambda ()
+
+				   (let* ((target (elt thread-P thread-j))
+					  (donor (funcall combination target thread-P thread-costs F))
+					  (trial (funcall mutation target donor CR))
+					  (score (funcall objective trial)))
+
+				     (if (< score (elt thread-costs thread-j))
+				       (values trial score)
+				       (values target (elt thread-costs thread-j)))))))))
+
+	 (loop
+	    :for j :from 0 :below NP
+	    :do
+	    (multiple-value-bind (survivor score) (join-thread (elt individuals j))
+	      (setf (aref P j) survivor)
+	      (setf (aref costs j) score)))))
 
     (report G P costs)
     (elt P (position (reduce #'min costs) costs))))
@@ -121,7 +165,7 @@
 
 	   ;; the refresh part
 	   (when (or (inbred-p P) (> stagnation-counter stagnation-limit))
-	     (setf NP (floor (* NP 1.1)))
+	     (setf NP (* NP 2))
 	     (setf P (refresh P NP population costs))
 	     (setf costs (make-array (length P) :initial-contents (map 'list objective P)))
 	     (setf stagnation-counter 0)
@@ -274,44 +318,6 @@
 	 (top-P (elt P (position cost costs))))
     (setf *C* (nconc *C* (list cost)))
     (format t "Gen: ~a~%Best: ~a~%Score: ~a~%~%" G cost top-P)))
-
-;; (defun mtde (pop-size max-generations cost-function dimensions cr f
-;; 	     &key (strat 'rand) (diffs 1) (rand-lb 0.0d0) (rand-ub 1.0d1))
-
-;;   (let* ((population (random-population pop-size dimensions :lower rand-lb :upper rand-ub))
-;; 	 (best (aref population 0))
-;; 	 (best-score (funcall cost-function best)))
-
-;;     (loop
-;;        :for g :from 0 :below max-generations
-;;        :until (eql best-score 0.0d0)
-;;        :do
-;;        (let ((individuals (loop
-;; 			     :for i :from 0 :below pop-size
-;; 			     :collect
-;; 			     (let ((pop population)
-;; 				   (safe-i i))
-;; 			       (make-thread (lambda ()
-;; 					      (let* ((target (aref pop safe-i))
-;; 						     (donor (if (equalp 'rand strat)
-;; 								(gen-donor (remove target pop :count 1) f :diffs diffs)
-;; 								(gen-donor-best best (remove target pop :count 1) f :diffs diffs)))
-;; 						     (trial (crossover target donor cr))
-;; 						     (selected (select target trial cost-function)))
-
-;; 						selected)))))))
-;; 	 (loop
-;; 	    :for i :from 0 :below (length individuals)
-;; 	    :do
-;; 	    (let ((survivor (join-thread (elt individuals i))))
-;; 	      (setf (aref population i) survivor)
-;; 	      (let ((this-score (funcall cost-function survivor)))
-;; 		(if (< this-score best-score)
-;; 		    (progn (setf best-score this-score)
-;; 			   (setf best survivor))))))))
-
-;;     best))
-
 
 ;; functions for common schemes
 (defun de/rand/1/bin (NP G D CR F &optional (cost-function #'rosenbrock))
